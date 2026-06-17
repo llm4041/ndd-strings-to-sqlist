@@ -1,8 +1,6 @@
-<<<<<<< HEAD
 # ndd-strings-to-sqlist —— Notepad-- 插件：字符串批量转 SQL IN 列表
 
-一个 Notepad-- (NDD) 插件，把光标选中（或所在行）的字符串列表
-自动转成 SQL `IN (...)` 格式。例如：
+一个 Notepad-- (NDD) 插件，把光标选中（或所在行）的字符串列表自动转成 SQL `IN (...)` 格式。例如：
 
 ```
 aaa、bbb、ccc        ->      ('aaa', 'bbb', 'ccc')
@@ -80,8 +78,7 @@ cmake --build build --config Release
 
 ## 安装到 Notepad--
 
-1. 把 `ndd-strings-to-sqlist.dll` 复制到 Notepad-- 安装目录下的 `plugin/` 子目录
-   （若不存在则新建）
+1. 把 `ndd-strings-to-sqlist.dll` 复制到 Notepad-- 安装目录下的 `plugin/` 子目录（若不存在则新建）
 2. 若插件需要 `qscintilla2_qt5.dll` / Qt 运行库，可使用 `windeployqt` 收集：
    ```powershell
    windeployqt --release --no-translations ndd-strings-to-sqlist.dll
@@ -156,13 +153,9 @@ O'Neil
 - **Q：想用双引号替代单引号做 IN？**  
   A：选 `高级转换...` → 引号类型选"双引号"即可。
 - **Q：如何绑定快捷键？**  
-  A：Notepad-- 主程序支持对菜单项绑定快捷键（见 NDD 官方文档中的"快捷键"一节）；在插件内的 QAction 也可以用 `setShortcut` 设置（本 MVP 未加，留给后续增强）。
+  A：Notepad-- 主程序支持对菜单项绑定快捷键（见 NDD 官方文档中的"快捷键"一节）；在插件内的 QAction 也可以用 `setShortcut` 设置（本 MVP 未加，留给扩展实现）。
 
 ## 协议
 
 - 与 Notepad-- 主程序保持一致：GPL-3.0。
 - 插件代码（本仓库）仅供 NDD 用户自行编译 / 使用，欢迎基于本模板开发更多小工具插件。
-=======
-# ndd-strings-to-sqlist
-ndd--sql格式化插件
->>>>>>> 7193f8853a6d327778288f6ca54372546ecf897d
