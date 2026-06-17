@@ -1,6 +1,5 @@
 name: Build NDD Plugin (StringsToSqlList)
 
-# 触发条件：推送到 main/master、或在网页上手动点 "Run workflow"
 on:
   push:
     branches: [ main, master ]
@@ -8,11 +7,7 @@ on:
 
 jobs:
   build:
-    # windows-2019 免费队列经常排队数小时，改用 windows-latest（Windows Server 2022 + VS 2022）
     runs-on: windows-latest
-    defaults:
-      run:
-        shell: cmd
 
     steps:
       - name: Checkout
@@ -24,34 +19,89 @@ jobs:
           python-version: '3.11'
 
       - name: Install Qt 5.15.2 (MSVC 2019 x64)
+        shell: pwsh
         run: |
           pip install aqtinstall
           aqt install-qt windows desktop 5.15.2 win64_msvc2019_64 -O C:\Qt
+          # 验证 Qt 是否安装成功
+          Get-ChildItem C:\Qt\5.15.2\msvc2019_64\bin -Filter qmake.exe
 
-      - name: Download & build QScintilla 2.14.1
-        # 说明：GitHub Actions 每个 run: 是一个独立的 shell 子进程，
-        # 所以 call vcvars64.bat / set PATH / cd 都只在当前块有效。
-        # 必须把所有命令写在同一个 run: 块里。
+      - name: Locate Visual Studio vcvars64.bat
+        shell: pwsh
         run: |
-          curl -L -o qscintilla.tar.gz https://www.riverbankcomputing.com/static/Downloads/QScintilla/2.14.1/QScintilla_src-2.14.1.tar.gz
+          # GitHub Actions 的 Windows runner 上 VS 路径可能有 Enterprise / Professional 两种
+          $vsPaths = @(
+            "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat",
+            "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat",
+            "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
+          )
+          $found = $vsPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $found) { Write-Error "vsvars64.bat NOT FOUND"; exit 1 }
+          Write-Host "FOUND: $found"
+          # 写入环境文件，后续步骤读取
+          $env:VCVARS_PATH = $found
+          Add-Content -Path $env:GITHUB_ENV -Value "VCVARS_PATH=$found"
+
+      - name: Download QScintilla 2.14.1
+        shell: pwsh
+        run: |
+          $url = "https://www.riverbankcomputing.com/static/Downloads/QScintilla/2.14.1/QScintilla_src-2.14.1.tar.gz"
+          try {
+            Invoke-WebRequest -Uri $url -OutFile qscintilla.tar.gz -UseBasicParsing -TimeoutSec 120
+          } catch {
+            Write-Error "Failed to download QScintilla: $_"
+            exit 1
+          }
           tar xzf qscintilla.tar.gz
-          cd QScintilla_src-2.14.1\src
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          # 列出解压后的目录，确认 qscintilla.pro 位置
+          Write-Host "=== QScintilla contents ==="
+          Get-ChildItem QScintilla_src-2.14.1
+          Write-Host "=== Looking for .pro file ==="
+          Get-ChildItem -Recurse QScintilla_src-2.14.1 -Filter *.pro
+
+      - name: Build QScintilla (lib/DLL)
+        shell: cmd
+        run: |
+          call "${{ env.VCVARS_PATH }}"
+          if errorlevel 1 exit 1
           set PATH=C:\Qt\5.15.2\msvc2019_64\bin;%PATH%
+          cd QScintilla_src-2.14.1\Qt4Qt5
           qmake qscintilla.pro
+          if errorlevel 1 exit 1
           nmake release
+          if errorlevel 1 exit 1
           nmake install
+          if errorlevel 1 exit 1
 
       - name: Build plugin DLL
+        shell: cmd
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          call "${{ env.VCVARS_PATH }}"
+          if errorlevel 1 exit 1
           set PATH=C:\Qt\5.15.2\msvc2019_64\bin;%PATH%
           qmake ndd-strings-to-sqlist.pro
+          if errorlevel 1 exit 1
           nmake release
+          if errorlevel 1 exit 1
+
+      - name: Locate built DLL (diagnostic)
+        shell: pwsh
+        run: |
+          Write-Host "=== Looking for built DLL ==="
+          $dlls = Get-ChildItem -Recurse -Filter *.dll -Path .
+          $dlls | Format-List FullName, Length
+          if (-not $dlls) { Write-Error "NO DLL FOUND"; exit 1 }
+          # 挑出我们的插件 DLL（排除 qscintilla dll）
+          $ourDll = $dlls | Where-Object { $_.Name -match "strings|sql" } | Select-Object -First 1
+          if (-not $ourDll) { $ourDll = $dlls | Select-Object -Last 1 }
+          Write-Host "Selected: $($ourDll.FullName)"
+          New-Item -ItemType Directory -Force -Path artifact | Out-Null
+          Copy-Item $ourDll.FullName artifact\
+          Get-ChildItem artifact
 
       - name: Upload DLL artifact
         uses: actions/upload-artifact@v4
         with:
           name: ndd-strings-to-sqlist-dll
-          path: build/release/*.dll
+          path: artifact/*.dll
           retention-days: 30
