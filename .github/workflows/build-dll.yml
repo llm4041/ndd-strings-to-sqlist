@@ -1,9 +1,9 @@
 name: Build NDD Plugin (StringsToSqlList)
 
-于:
-  推送:
-    分支: [ main, master ]
-  工作流程调度:
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build:
