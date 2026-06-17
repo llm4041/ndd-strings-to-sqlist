@@ -73,20 +73,28 @@ jobs:
           $url = "https://www.riverbankcomputing.com/static/Downloads/QScintilla/2.14.1/QScintilla_src-2.14.1.tar.gz"
           Invoke-WebRequest -Uri $url -OutFile qscintilla.tar.gz -UseBasicParsing -TimeoutSec 120
 
-          # Note: Windows runner 的 tar 有时行为差异。先尝试 tar 解压，如果失败可考虑改为 7z 或 Expand-Archive。
+          Write-Host "Extracting QScintilla..."
           tar xzf qscintilla.tar.gz
+          
+          # 验证解压成功
+          if (!(Test-Path "QScintilla_src-2.14.1")) {
+            Write-Host "==== Debug: top-level listing ===="
+            Get-ChildItem -Force | Select-Object -First 200
+            Write-Error "QScintilla_src-2.14.1 directory not found after extraction"
+            exit 1
+          }
 
           # 导出 QTDIR
           "QTDIR=C:\Qt\5.15.2\msvc2019_64" | Add-Content -Path $env:GITHUB_ENV
 
           # 自动查找 qscintilla.pro 并导出目录到 GITHUB_ENV
-          $qpro = Get-ChildItem -Recurse -Filter qscintilla.pro -ErrorAction SilentlyContinue | Select-Object -First 1
+          $qpro = Get-ChildItem -Path "QScintilla_src-2.14.1" -Recurse -Filter qscintilla.pro -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $qpro) {
-            Write-Host "==== Debug: top-level listing ===="
-            Get-ChildItem -Force | Select-Object -First 200
-            Write-Host "==== Debug: recursive listing (first 200 entries) ===="
-            Get-ChildItem -Recurse -Force | Select-Object -First 200
-            Write-Error "qscintilla.pro not found after extracting qscintilla.tar.gz"
+            Write-Host "==== Debug: QScintilla_src-2.14.1 contents ===="
+            Get-ChildItem -Path "QScintilla_src-2.14.1" -Force
+            Write-Host "==== Debug: recursive listing ===="
+            Get-ChildItem -Path "QScintilla_src-2.14.1" -Recurse -Force | Select-Object -First 200
+            Write-Error "qscintilla.pro not found in QScintilla_src-2.14.1"
             exit 1
           }
 
@@ -96,7 +104,8 @@ jobs:
           "QSCINTILLA_DIR=$qdir" | Add-Content -Path $env:GITHUB_ENV
 
           # 列出找到的 .pro 文件供调试
-          Get-ChildItem -Recurse -Filter *.pro | Select-Object -First 20
+          Write-Host "Found .pro files:"
+          Get-ChildItem -Path "QScintilla_src-2.14.1" -Recurse -Filter *.pro | Select-Object -ExpandProperty FullName | Select-Object -First 20
 
       - name: Build QScintilla
         shell: cmd
@@ -108,37 +117,37 @@ jobs:
 
           echo QTDIR=%QTDIR%
           echo QSCINTILLA_DIR=%QSCINTILLA_DIR%
+          echo Current dir: %CD%
 
           rem 优先在 QSCINTILLA_DIR 下找 qscintilla.pro
           if exist "%QSCINTILLA_DIR%\qscintilla.pro" (
+            echo Found at QSCINTILLA_DIR\qscintilla.pro
             cd "%QSCINTILLA_DIR%"
           ) else if exist "%QSCINTILLA_DIR%\Qt4Qt5\qscintilla.pro" (
+            echo Found at QSCINTILLA_DIR\Qt4Qt5\qscintilla.pro
             cd "%QSCINTILLA_DIR%\Qt4Qt5"
+          ) else if exist "QScintilla_src-2.14.1\src\qscintilla.pro" (
+            echo Found at QScintilla_src-2.14.1\src\qscintilla.pro
+            cd "QScintilla_src-2.14.1\src"
           ) else (
-            rem 递归查找 workspace 中的 qscintilla.pro 并切换到其目录
-            set FOUND_QPRO_DIR=
-            for /f "delims=" %%F in ('dir /s /b qscintilla.pro 2^>nul') do (
-              set FOUND_QPRO=%%F
-              goto :found_qpro
-            )
-            echo ==== Debug: listing current workspace (top-level) ====
+            echo ==== Debug: current directory contents ====
             dir /b
-            echo qscintilla.pro not found in QSCINTILLA_DIR or workspace. Failing.
-            exit 1
-
-            :found_qpro
-            for %%D in ("%FOUND_QPRO%") do set FOUND_QPRO_DIR=%%~dpD
-            echo Auto-found qscintilla.pro at %FOUND_QPRO_DIR%
-            cd "%FOUND_QPRO_DIR%"
+            echo ==== Debug: searching for qscintilla.pro ====
+            dir /s /b qscintilla.pro 2>nul || echo No qscintilla.pro found
+            echo qscintilla.pro not found. Failing.
+            exit /b 1
           )
 
           echo Now in %CD%
+          echo Running qmake...
           qmake qscintilla.pro
-          if errorlevel 1 exit 1
+          if errorlevel 1 exit /b 1
+          echo Running nmake release...
           nmake release
-          if errorlevel 1 exit 1
+          if errorlevel 1 exit /b 1
+          echo Running nmake install...
           nmake install
-          if errorlevel 1 exit 1
+          if errorlevel 1 exit /b 1
 
       - name: Diagnose — where did QScintilla install to?
         shell: pwsh
@@ -146,13 +155,13 @@ jobs:
           Write-Host "=== QTDIR/include/Qsci ==="
           if (Test-Path "$env:QTDIR\include\Qsci") { Get-ChildItem "$env:QTDIR\include\Qsci" -Name | Select-Object -First 15 } else { Write-Host "(directory not found)" }
           Write-Host "=== QTDIR/lib (looking for qscintilla lib) ==="
-          Get-ChildItem -Recurse -Path $env:QTDIR\lib -Filter "*qscintilla*"
+          Get-ChildItem -Recurse -Path $env:QTDIR\lib -Filter "*qscintilla*" -ErrorAction SilentlyContinue
           Write-Host "=== QTDIR/bin (looking for qscintilla dll) ==="
-          Get-ChildItem -Recurse -Path $env:QTDIR\bin -Filter "*qscintilla*"
+          Get-ChildItem -Recurse -Path $env:QTDIR\bin -Filter "*qscintilla*" -ErrorAction SilentlyContinue
           Write-Host "=== QScintilla build output folders ==="
-          Get-ChildItem -Recurse -Path . -Filter "*.lib"
-          Get-ChildItem -Recurse -Path . -Filter "*.dll"
-          Get-ChildItem -Recurse -Path . -Filter "*.h" | Select-Object -First 10 FullName
+          Get-ChildItem -Recurse -Path . -Filter "*.lib" -ErrorAction SilentlyContinue | Select-Object -First 10
+          Get-ChildItem -Recurse -Path . -Filter "*.dll" -ErrorAction SilentlyContinue | Select-Object -First 10
+          Get-ChildItem -Recurse -Path . -Filter "*.h" -ErrorAction SilentlyContinue | Select-Object -First 10 FullName
 
       - name: Build plugin DLL
         shell: cmd
@@ -184,9 +193,9 @@ jobs:
 
           :have_qscintilla
           qmake ndd-strings-to-sqlist.pro
-          if errorlevel 1 exit 1
+          if errorlevel 1 exit /b 1
           nmake release
-          if errorlevel 1 exit 1
+          if errorlevel 1 exit /b 1
 
       - name: Locate built DLL
         shell: pwsh
