@@ -61,9 +61,8 @@ private:
     QString getSelectedTextOrLine();
     void    replaceSelectedOrLine(const QString& text);
 
-    // 通用实现：将 input 按给定分隔符切分并拼装
-    static QString doConvert(const QString& input,
-                             const QString& delimiter,
+    // 通用实现：将 parts 按给定分隔符切分并拼装
+    static QString doConvert(const QStringList& parts,
                              bool trimItems,
                              bool skipEmpty,
                              const QString& quoteChar,
