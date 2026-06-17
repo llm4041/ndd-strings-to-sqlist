@@ -79,7 +79,25 @@ jobs:
 
           # 导出 QTDIR（与原来一致）
           "QTDIR=C:\Qt\5.15.2\msvc2019_64" | Add-Content -Path $env:GITHUB_ENV
-          Get-ChildItem -Recurse QScintilla_src-2.14.1 -Filter *.pro
+
+          # ----- 新增：自动查找 qscintilla.pro 并导出目录 -----
+          $qpro = Get-ChildItem -Recurse -Filter qscintilla.pro -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $qpro) {
+            Write-Host "==== Debug: listing top-level after extraction ===="
+            Get-ChildItem -Force | Select-Object -First 200
+            Write-Host "==== Debug: recursive listing (first 200 entries) ===="
+            Get-ChildItem -Recurse -Force | Select-Object -First 200
+            Write-Error "qscintilla.pro not found after extracting qscintilla.tar.gz"
+            exit 1
+          }
+
+          $qdir = Split-Path $qpro.FullName -Parent
+          Write-Host "Found qscintilla.pro at: $($qpro.FullName)"
+          Write-Host "Setting QSCINTILLA_DIR to: $qdir"
+          "QSCINTILLA_DIR=$qdir" | Add-Content -Path $env:GITHUB_ENV
+
+          # 额外列出 .pro 文件位置供流水线日志查看
+          Get-ChildItem -Recurse -Filter *.pro | Select-Object -First 20
 
       - name: Build QScintilla
         shell: cmd
