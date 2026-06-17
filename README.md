@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # ndd-strings-to-sqlist —— Notepad-- 插件：字符串批量转 SQL IN 列表
 
 一个 Notepad-- (NDD) 插件，把光标选中（或所在行）的字符串列表
@@ -161,3 +162,7 @@ O'Neil
 
 - 与 Notepad-- 主程序保持一致：GPL-3.0。
 - 插件代码（本仓库）仅供 NDD 用户自行编译 / 使用，欢迎基于本模板开发更多小工具插件。
+=======
+# ndd-strings-to-sqlist
+ndd--sql格式化插件
+>>>>>>> 7193f8853a6d327778288f6ca54372546ecf897d
