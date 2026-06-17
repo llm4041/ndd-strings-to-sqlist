@@ -1,0 +1,53 @@
+name: Build NDD Plugin (StringsToSqlList)
+
+# 触发条件：推送到 main/master、或在网页上手动点 "Run workflow"
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2019
+    defaults:
+      run:
+        shell: cmd
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Python (for aqtinstall)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Qt 5.15.2 (MSVC 2019 x64)
+        run: |
+          pip install aqtinstall
+          aqt install-qt windows desktop 5.15.2 win64_msvc2019_64 -O C:\Qt
+
+      - name: Download & build QScintilla 2.14.1
+        run: |
+          curl -L -o qscintilla.tar.gz https://www.riverbankcomputing.com/static/Downloads/QScintilla/2.14.1/QScintilla_src-2.14.1.tar.gz
+          tar xzf qscintilla.tar.gz
+          cd QScintilla_src-2.14.1\src
+          call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          set PATH=C:\Qt\5.15.2\msvc2019_64\bin;%PATH%
+          qmake qscintilla.pro
+          nmake release
+          nmake install
+
+      - name: Build plugin DLL
+        run: |
+          call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          set PATH=C:\Qt\5.15.2\msvc2019_64\bin;%PATH%
+          qmake ndd-strings-to-sqlist.pro
+          nmake release
+
+      - name: Upload DLL artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ndd-strings-to-sqlist-dll
+          path: build/release/*.dll
+          retention-days: 30

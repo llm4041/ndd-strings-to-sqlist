@@ -1,0 +1,28 @@
+# GitHub Actions 运行缓存与本地构建产物
+build/
+*.o
+*.obj
+*.dll
+*.exe
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.qm
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+*.autosave
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
