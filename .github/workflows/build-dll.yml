@@ -61,29 +61,28 @@ jobs:
             }
           }
 
-          # 最终失败时给出清晰错误
           if (-not $vcvars) {
             Write-Error "vcvars64.bat not found. Ensure Visual Studio with C++ build tools is present on this runner."
             exit 1
           }
 
           Write-Host "vcvars64.bat found at: $vcvars"
-
-          # 导出到 GITHUB_ENV，后续 cmd 步骤可通过 %VCVARS_PATH% 使用
           "VCVARS_PATH=$vcvars" | Add-Content -Path $env:GITHUB_ENV
 
-          # QScintilla 下载与解压（保留原流程）
+          # QScintilla 下载与解压
           $url = "https://www.riverbankcomputing.com/static/Downloads/QScintilla/2.14.1/QScintilla_src-2.14.1.tar.gz"
           Invoke-WebRequest -Uri $url -OutFile qscintilla.tar.gz -UseBasicParsing -TimeoutSec 120
+
+          # Note: Windows runner 的 tar 有时行为差异。先尝试 tar 解压，如果失败可考虑改为 7z 或 Expand-Archive。
           tar xzf qscintilla.tar.gz
 
-          # 导出 QTDIR（与原来一致）
+          # 导出 QTDIR
           "QTDIR=C:\Qt\5.15.2\msvc2019_64" | Add-Content -Path $env:GITHUB_ENV
 
-          # ----- 新增：自动查找 qscintilla.pro 并导出目录 -----
+          # 自动查找 qscintilla.pro 并导出目录到 GITHUB_ENV
           $qpro = Get-ChildItem -Recurse -Filter qscintilla.pro -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $qpro) {
-            Write-Host "==== Debug: listing top-level after extraction ===="
+            Write-Host "==== Debug: top-level listing ===="
             Get-ChildItem -Force | Select-Object -First 200
             Write-Host "==== Debug: recursive listing (first 200 entries) ===="
             Get-ChildItem -Recurse -Force | Select-Object -First 200
@@ -96,7 +95,7 @@ jobs:
           Write-Host "Setting QSCINTILLA_DIR to: $qdir"
           "QSCINTILLA_DIR=$qdir" | Add-Content -Path $env:GITHUB_ENV
 
-          # 额外列出 .pro 文件位置供流水线日志查看
+          # 列出找到的 .pro 文件供调试
           Get-ChildItem -Recurse -Filter *.pro | Select-Object -First 20
 
       - name: Build QScintilla
@@ -106,7 +105,34 @@ jobs:
           set PATH=%QTDIR%\bin;%PATH%
           set INCLUDE=%QTDIR%\include;%INCLUDE%
           set LIB=%QTDIR%\lib;%LIB%
-          cd QScintilla_src-2.14.1\Qt4Qt5
+
+          echo QTDIR=%QTDIR%
+          echo QSCINTILLA_DIR=%QSCINTILLA_DIR%
+
+          rem 优先在 QSCINTILLA_DIR 下找 qscintilla.pro
+          if exist "%QSCINTILLA_DIR%\qscintilla.pro" (
+            cd "%QSCINTILLA_DIR%"
+          ) else if exist "%QSCINTILLA_DIR%\Qt4Qt5\qscintilla.pro" (
+            cd "%QSCINTILLA_DIR%\Qt4Qt5"
+          ) else (
+            rem 递归查找 workspace 中的 qscintilla.pro 并切换到其目录
+            set FOUND_QPRO_DIR=
+            for /f "delims=" %%F in ('dir /s /b qscintilla.pro 2^>nul') do (
+              set FOUND_QPRO=%%F
+              goto :found_qpro
+            )
+            echo ==== Debug: listing current workspace (top-level) ====
+            dir /b
+            echo qscintilla.pro not found in QSCINTILLA_DIR or workspace. Failing.
+            exit 1
+
+            :found_qpro
+            for %%D in ("%FOUND_QPRO%") do set FOUND_QPRO_DIR=%%~dpD
+            echo Auto-found qscintilla.pro at %FOUND_QPRO_DIR%
+            cd "%FOUND_QPRO_DIR%"
+          )
+
+          echo Now in %CD%
           qmake qscintilla.pro
           if errorlevel 1 exit 1
           nmake release
@@ -124,9 +150,9 @@ jobs:
           Write-Host "=== QTDIR/bin (looking for qscintilla dll) ==="
           Get-ChildItem -Recurse -Path $env:QTDIR\bin -Filter "*qscintilla*"
           Write-Host "=== QScintilla build output folders ==="
-          Get-ChildItem -Recurse -Path QScintilla_src-2.14.1 -Filter "*.lib"
-          Get-ChildItem -Recurse -Path QScintilla_src-2.14.1 -Filter "*.dll"
-          Get-ChildItem -Recurse -Path QScintilla_src-2.14.1 -Filter "*.h" | Select-Object -First 10 FullName
+          Get-ChildItem -Recurse -Path . -Filter "*.lib"
+          Get-ChildItem -Recurse -Path . -Filter "*.dll"
+          Get-ChildItem -Recurse -Path . -Filter "*.h" | Select-Object -First 10 FullName
 
       - name: Build plugin DLL
         shell: cmd
