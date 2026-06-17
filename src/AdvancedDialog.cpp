@@ -76,7 +76,7 @@ void AdvancedDialog::buildUi()
     m_quoteCombo->addItem(QObject::tr("双引号  \"...\""), QStringLiteral("\""));
     m_quoteCombo->addItem(QObject::tr("不加引号"), QString());
 
-    m_wrapCheck = new QCheckBox(QObject::tr("首尾加  ( ... 包裹")), optBox);
+    m_wrapCheck = new QCheckBox(QObject::tr("首尾加  ( ... )  包裹"), optBox);
     m_wrapCheck->setChecked(true);
 
     m_joinerEdit = new QLineEdit(optBox);
