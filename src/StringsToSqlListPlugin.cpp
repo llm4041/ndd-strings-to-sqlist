@@ -148,21 +148,8 @@ QString StringsToSqlListPlugin::convertAdvanced(const QString& input,
 
 
 // ---------------------------------------------------------------------------
-// 通用实现（外部使用字符串版，内部走 QStringList 版）
+// 通用实现（QStringList 版本 - 内部使用）
 // ---------------------------------------------------------------------------
-QString StringsToSqlListPlugin::doConvert(const QString& input,
-                                          const QString& delimiter,
-                                          bool trimItems,
-                                          bool skipEmpty,
-                                          const QString& quoteChar,
-                                          bool wrapParens,
-                                          const QString& joiner)
-{
-    if (delimiter.isEmpty()) return input;
-    QStringList parts = input.split(delimiter, Qt::KeepEmptyParts);
-    return doConvert(parts, trimItems, skipEmpty, quoteChar, wrapParens, joiner);
-}
-
 QString StringsToSqlListPlugin::doConvert(const QStringList& parts,
                                           bool trimItems,
                                           bool skipEmpty,
@@ -191,7 +178,7 @@ QString StringsToSqlListPlugin::doConvert(const QStringList& parts,
 }
 
 QString StringsToSqlListPlugin::escapeQuote(const QString& token,
-                                            const QString& quoteChar)
+                                             const QString& quoteChar)
 {
     if (quoteChar.isEmpty()) return token;
     // SQL 约定：字符串字面量内部的引号以"加倍"方式转义
@@ -219,8 +206,8 @@ QString StringsToSqlListPlugin::getSelectedTextOrLine()
     if (!sel.isEmpty()) return sel;
 
     // 未选中时，读取光标所在的整行
-    int line = pEdit->lineFromPosition(pEdit->currentPosition());
-    QString lineText = pEdit->text(line);
+    long line = pEdit->SendScintilla(QsciScintillaBase::SCI_LINEFROMPOSITION, pEdit->SendScintilla(QsciScintillaBase::SCI_GETCURRENTPOS));
+    QString lineText = pEdit->text(static_cast<int>(line));
     // pEdit->text(line) 往往末尾附换行，这里去掉
     while (!lineText.isEmpty() &&
            (lineText.endsWith(QChar('\n')) || lineText.endsWith(QChar('\r')))) {
@@ -238,10 +225,11 @@ void StringsToSqlListPlugin::replaceSelectedOrLine(const QString& text)
     if (!pEdit->selectedText().isEmpty()) {
         pEdit->replaceSelectedText(text);
     } else {
-        int line = pEdit->lineFromPosition(pEdit->currentPosition());
-        int pos  = pEdit->positionFromLine(line);
-        int len  = pEdit->lineLength(line);
-        pEdit->setSelection(pos, pos + len);
+        long curPos = pEdit->SendScintilla(QsciScintillaBase::SCI_GETCURRENTPOS);
+        long line = pEdit->SendScintilla(QsciScintillaBase::SCI_LINEFROMPOSITION, curPos);
+        long lineStart = pEdit->SendScintilla(QsciScintillaBase::SCI_POSITIONFROMLINE, line);
+        long lineLen = pEdit->SendScintilla(QsciScintillaBase::SCI_LINELENGTH, line);
+        pEdit->SendScintilla(QsciScintillaBase::SCI_SETSEL, lineStart, lineStart + lineLen);
         pEdit->replaceSelectedText(text);
     }
 }
