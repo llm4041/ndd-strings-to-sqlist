@@ -42,6 +42,8 @@ jobs:
         run: |
           call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           set PATH=C:\Qt\5.15.2\msvc2019_64\bin;%PATH%
+          set INCLUDE=C:\Qt\5.15.2\msvc2019_64\include;%INCLUDE%
+          set LIB=C:\Qt\5.15.2\msvc2019_64\lib;%LIB%
           qmake ndd-strings-to-sqlist.pro
           nmake release
 
